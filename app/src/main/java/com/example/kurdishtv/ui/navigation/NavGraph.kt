@@ -10,6 +10,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -70,6 +73,32 @@ fun KurdishTvNavGraph(
     // `Int` parameter, which does not typecheck.
     val backStackEntry by navController.currentBackStackEntryAsState()
     val backStackEntryId = backStackEntry?.id.orEmpty()
+
+    // Auto-resume: a cold start opens the last watched channel instead of the
+    // browse screen, so a television that turns on is back on what was being
+    // watched before a remote is picked up.
+    //
+    // One shot per visit, and saved so a configuration change does not fire it
+    // twice. It deliberately waits for `recentChannels` rather than for a loading
+    // flag: the history is populated by the cold-start hydration, and a viewer who
+    // has never watched anything — or who just cleared their history — gets the
+    // normal browse screen, not an empty player.
+    //
+    // It runs on any cold start, not only on boot broadcasts. A television kills
+    // its apps aggressively, so most "turn on the TV" sessions reach the app as a
+    // process that was killed overnight, launched from the launcher rather than
+    // from a boot intent — and gating on the intent would cover the rarer path
+    // while missing the common one. The boot receiver's own job is only to open
+    // the app in the first place. See `boot/AutoStartReceiver`.
+    var autoResumeApplied by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(settingsLoaded, settings.autoResume, uiState.recentChannels) {
+        if (autoResumeApplied) return@LaunchedEffect
+        if (!settingsLoaded || !settings.autoResume) return@LaunchedEffect
+        val lastWatched = uiState.recentChannels.firstOrNull() ?: return@LaunchedEffect
+        autoResumeApplied = true
+        viewModel.onChannelSelected(lastWatched)
+        navController.navigate(Screen.Player.route)
+    }
 
     NavHost(
         navController = navController,

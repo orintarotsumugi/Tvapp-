@@ -65,6 +65,19 @@ data class AppSettings(
      */
     val deviceMode: DeviceMode = DeviceMode.AUTO,
     val startCategory: CategoryFilter = CategoryFilter.ALL,
+    /**
+     * Whether the app starts itself when the device boots, and whether a cold
+     * start opens the last watched channel instead of the browse screen.
+     *
+     * One switch for both, because they are one wish: a television that turns on
+     * should be back on what was being watched, with no remote in the hand yet.
+     * The boot half is [com.example.kurdishtv.boot.AutoStartReceiver]; the resume
+     * half is the navigation layer, which also covers app launches that did not
+     * come from a boot broadcast — a TV box kills its apps aggressively, so most
+     * "turn on the TV" sessions are actually cold starts of a process that was
+     * killed overnight.
+     */
+    val autoResume: Boolean = true,
     val autoplay: Boolean = true,
     val showLogos: Boolean = true,
     val autoHideControls: Boolean = true,

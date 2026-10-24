@@ -7,7 +7,62 @@ and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The app starts itself when the television turns on, and opens the last watched
+  channel.** One switch in Settings → Browsing — "Auto-resume on start" — gates
+  both halves, because they are one wish: a TV that comes on should be back on what
+  was being watched before anyone picks up a remote.
+  - The boot half is a `RECEIVE_BOOT_COMPLETED` receiver
+    (`boot/AutoStartReceiver`) that reads the switch *before* launching anything,
+    so an opted-out viewer is never disturbed. It also answers
+    `QUICKBOOT_POWER_ON`, the same event under the name several TV boxes send.
+  - The resume half lives in the navigation graph rather than in the receiver, and
+    runs on **every** cold start, not only on boot broadcasts. That is deliberate:
+    TV boxes kill their apps aggressively, so most "turn on the TV" sessions reach
+    the app as a process that was killed overnight, launched from the launcher —
+    gating on the boot intent would cover the rarer path and miss the common one.
+    A viewer with an empty history, or who has just cleared it, gets the normal
+    browse screen; the resume is one-shot per visit so a configuration change
+    cannot fire it twice.
+  - Honest caveat, documented in the manifest: some Android 10+ firmwares block an
+    activity launched straight from a boot broadcast (the background-activity-start
+    rules). When that happens nothing breaks — the app simply opens on the next
+    manual launch, straight into the last channel, because the resume half does not
+    depend on how the app was started.
+
 ### Changed
+- **The on-screen keyboard no longer opens by itself on launch.** Two causes, both
+  fixed, because either alone was enough to put a keyboard over the channel grid
+  before the viewer had touched anything:
+  - The activity's soft-input mode was the default `stateUnspecified`, which lets
+    the system *restore the IME visibility of the previous session*. A TV box kills
+    apps rather than exiting them, so "the previous session" is very often one that
+    ended with the keyboard up — and the keyboard came back on the first frame.
+    It is now `stateHidden`, which bars the IME at launch and only at launch: a
+    viewer who deliberately walks the D-pad onto the search field still gets the
+    keyboard, because that is a fresh show request from a focused field.
+  - Independently, the search field is the one focus target on the screen whose
+    focus has a side effect beyond its own highlight, and the focus system's first
+    placement can land on it before the grid has had a frame to claim focus for the
+    first card. The field now refuses focus for the first frame of a visit — a
+    window far below human reaction time — after which it is a normal, reachable
+    search box. This also closes the quieter half of the bug: the remote's number
+    pad is disabled while the search field is focused, so a launch that landed
+    focus there turned `47` into text in a search box instead of a jump to channel
+    47.
+- **A stale channel cache is shown on a cold start instead of being thrown away.**
+  When the 30-minute freshness window had passed, the app fell back to the
+  98-channel bundled catalogue while it refetched — so a viewer whose cache held
+  six hundred channels watched them *shrink* to ninety-eight for the duration of
+  the merge and then grow back. The grid is now complete and browsable on the
+  first frame: the stale list is served immediately (bounded by a week, past which
+  IPTV links are as likely dead as alive and the audited bundled catalogue is the
+  better guess), and the merge refreshes over the top of it. Only a *fresh* cache
+  still short-circuits the fetch; a stale one reports itself as stale so the
+  refresh actually runs. `isServableCacheAge` is a pure function with boundary
+  tests, because the two interesting failures — an absent cache reporting age 0
+  and being *shown* in place of the catalogue, and a future-stamped file reading
+  as brand new — are both invisible until a viewer has no channels.
 - **The app ships one language's worth of resources instead of all of them.** This
   app has no translations of its own - `strings.xml` holds a single string and every
   visible label is written inline in Kotlin - so nothing here would ever answer to a
@@ -237,6 +292,42 @@ and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
       fall back to the icon-only form `LabelPillButton` already supports.
 
 ### Fixed
+- **In-app updates could never install, for anyone.** The release buildType was
+  signing with AGP's default *debug* config, and `debug.keystore` is gitignored —
+  so every CI run generated a fresh random key and every published APK was signed
+  differently from the one before it. The updater's own signature check
+  (`ApkInstaller.isSignedBySameCertificate`) then correctly refused each download,
+  and Android itself would have refused with
+  `INSTALL_FAILED_UPDATE_INCOMPATIBLE` anyway. The committed release key
+  (`release-key.jks`, alias `upload`, see SIGNING.md) is restored as the release
+  signing config, with the environment-key override kept and the debug fallback
+  demoted to a loudly-warned last resort that cannot be reached while the
+  committed key is present. **Anyone who installed a build published while debug
+  signing was in force must uninstall once** — their copy is signed with a
+  per-run random key and no upgrade path exists for it; from the first build
+  signed with the committed key onwards, updates install over each other again.
+- **The local-build version floor was three releases behind.**
+  `kurdishTvVersionCode` was still 100 (the v1.0.41 era) while the published
+  manifest stood at 173, so any APK built locally advertised itself as older than
+  the release the viewer already had and offered an update to it. Raised to 173,
+  and `kurdishTvVersionName` to 1.0.65 to match.
+- **The cache-reset row — and with it the entire ads-unlock flow — was dead on a
+  television.** `HoldToUnlockActionRow` was driven by a raw `pointerInput` gesture
+  and nothing else. A remote's OK button is a *key*, and Compose's gesture handlers
+  never see keys: the row could not be focused, could not be clicked and could not
+  be held, so on the device this app is built for, "Clear channel cache" looked
+  live and did nothing — and the documented ten-second hold that reveals the ads
+  menu was unreachable. The row is now driven by the shared interaction source
+  that both inputs feed: touch through `clickable`'s press interactions, and the
+  D-pad through explicit key handling (key down starts the hold, key up ends it,
+  auto-repeat ignored), with the tap-vs-hold decision in one pure function.
+  - Holding and *releasing before* the ten seconds now does nothing, which is a
+    fix in its own right: the old code fired the destructive action on any release
+    after a hold had begun, so a viewer who started holding to unlock the ads menu
+    and thought better of it at four seconds cleared their whole channel cache on
+    the way out.
+  - `isTapRelease` has tests. A two-clause predicate guarding a destructive action
+    is exactly the shape that gets quietly "simplified".
 - **Changing to a dead channel reported nothing at all.** The player's error listener
   is installed once per *player*, not once per callback, so it closed over whatever
   `onPlaybackError` was at that composition. The player is remembered on the context

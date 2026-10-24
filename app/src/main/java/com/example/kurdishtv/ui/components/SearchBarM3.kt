@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
@@ -31,6 +32,23 @@ fun SearchBarM3(
      * number pad from stealing digits from someone typing a search.
      */
     onFocusChanged: (Boolean) -> Unit = {},
+    /**
+     * Whether the field may take focus at all.
+     *
+     * False for the first frame of a visit, on purpose. A text field is the one
+     * focus target on the screen whose focus has a side effect beyond its own
+     * highlight: on Android TV it also *opens the on-screen keyboard*. If the
+     * focus system lands on it during launch — before the grid has had a frame
+     * to claim focus for the first card — the viewer watches the keyboard rise
+     * over the channel grid for no reason they asked for, and digits typed for a
+     * channel number go into the search field instead.
+     *
+     * The window is one frame, so no human can lose access to it: the D-pad
+     * cannot move faster than the frame that lifts the gate, and the field is a
+     * normal, reachable search box from then on. See `MainTvScreen`, which owns
+     * the gate.
+     */
+    focusEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalAppColors.current
@@ -107,6 +125,7 @@ fun SearchBarM3(
         ),
         modifier = modifier
             .testTag("search_input")
+            .focusProperties { canFocus = focusEnabled }
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
             // Clear focus when the keyboard's Search key is pressed. Handled through

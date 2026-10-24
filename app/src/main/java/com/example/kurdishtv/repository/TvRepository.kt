@@ -48,6 +48,30 @@ internal fun shouldReplaceCache(mergedSize: Int, cachedSize: Int): Boolean =
     mergedSize >= cachedSize
 
 /**
+ * Whether a cache of this age is still worth *showing* on a cold start, even when
+ * it is too old to trust without refreshing.
+ *
+ * Zero means "nothing is cached" (see [ChannelCacheStorage.getCacheAgeMs]) and a
+ * cache file stamped in the *future* by a corrected clock reports the largest age
+ * there is — so neither can pass this by accident. [CachePolicyTest] pins the
+ * boundaries.
+ */
+internal fun isServableCacheAge(ageMs: Long): Boolean =
+    ageMs > 0L && ageMs < SERVE_STALE_MS
+
+/**
+ * How long a *stale* cache is still shown on a cold start while the merge
+ * refreshes behind it.
+ *
+ * A week. Past this the channels are as likely to be mostly dead as alive — IPTV
+ * links rotate — and showing them would be a worse guess than the curated bundled
+ * catalogue, which is audited. Below it the trade is clear: six hundred
+ * possibly-stale channels the viewer can browse *now*, over ninety-eight fresh
+ * ones they can browse in eight seconds.
+ */
+internal const val SERVE_STALE_MS = 7 * 24 * 60 * 60 * 1000L
+
+/**
  * What [TvRepository.getInstantInitialChannels] produced, and where it came from.
  *
  * A named pair rather than a bare list because the caller has to act on the second
@@ -83,13 +107,34 @@ class TvRepository(
      * the same bytes back. When it is true, a subsequent non-forced
      * [fetchChannels] is a no-op by construction, so the caller can skip it rather
      * than re-reading the file and re-filtering the list it already has on screen.
+     *
+     * ## Stale is served too, and that is deliberate
+     *
+     * When the cache is older than [CACHE_FRESH_MS] this used to fall back to the
+     * 98-channel bundled catalogue and refetch from scratch — so a viewer whose
+     * cache held six hundred channels from yesterday watched them *shrink* to
+     * ninety-eight for the duration of the merge, then grow back. The network was
+     * doing the right thing; the cold start was throwing away the best answer it
+     * already had.
+     *
+     * A stale list is now shown while the merge runs behind it (bounded by
+     * [SERVE_STALE_MS], past which the file is treated as gone): the grid is
+     * complete and browsable on the first frame, channels from the refreshed
+     * sources land when they land, and the viewer never sees a screen get smaller.
+     * Only the *fresh* cache short-circuits the fetch — a stale one still reports
+     * `fromFreshCache = false` so the caller knows to refresh over the top.
      */
     fun getInstantInitialChannels(): InitialChannels {
-        val cached = freshCachedChannels()
+        val ageMs = channelCacheStorage.getCacheAgeMs()
+        val cached = if (isServableCacheAge(ageMs)) {
+            channelCacheStorage.getCachedChannels()?.takeIf { it.isNotEmpty() }
+        } else {
+            null
+        }
         val channels = cached ?: KurdishChannelCatalog.getDefaultChannels()
         return InitialChannels(
             channels = applyFavorites(channels),
-            fromFreshCache = cached != null
+            fromFreshCache = cached != null && ageMs < CACHE_FRESH_MS
         )
     }
 
