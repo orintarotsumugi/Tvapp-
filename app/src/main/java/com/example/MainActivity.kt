@@ -28,6 +28,17 @@ import com.example.ui.theme.KurdishTvTheme
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        /**
+         * The action [com.example.kurdishtv.boot.AutoStartReceiver] launches the
+         * activity with when the device boots. Informational by design: the resume
+         * itself is driven by the viewer's "Auto-resume on start" setting rather
+         * than by the shape of the intent, so every cold start — boot, launcher,
+         * or a link — resumes the same way.
+         */
+        const val ACTION_AUTO_RESUME = "com.aistudio.kurdishtv.live.AUTO_RESUME"
+    }
+
     private val favoriteStorage by lazy { FavoriteStorage(applicationContext) }
     private val recentStorage by lazy { RecentStorage(applicationContext) }
     private val customPlaylistStorage by lazy { CustomPlaylistStorage(applicationContext) }

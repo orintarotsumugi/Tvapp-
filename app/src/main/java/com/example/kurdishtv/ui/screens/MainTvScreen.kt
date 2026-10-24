@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
@@ -123,6 +124,27 @@ fun MainTvScreen(
     // explicitly rather than relied upon.
     var searchFieldFocused by remember { mutableStateOf(false) }
     var appliedStartCategory by rememberSaveable { mutableStateOf(false) }
+
+    // Whether the search field may take focus on this visit yet.
+    //
+    // It may not for the first frame. A focused text field on Android TV opens the
+    // on-screen keyboard, and the focus system's very first placement happens
+    // before the grid has had a frame to claim focus for the first card — so on
+    // some devices the keyboard rose over the channel grid at launch, over and
+    // above whatever the system's own soft-input state did (the manifest's
+    // `stateHidden` handles that half; this handles the focus half). It also ate
+    // the remote's digits: the number pad is disabled while the search field is
+    // focused, so a launch that landed focus here made `47` type into a search
+    // box instead of jumping to channel 47.
+    //
+    // One frame is far below human reaction time, so nobody can lose the field:
+    // from the second frame on it is a normal, reachable search box.
+    var searchFocusable by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        searchFocusable = true
+    }
+
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Which categories the chips decided to show, handed to the navigation rail so
@@ -340,6 +362,7 @@ fun MainTvScreen(
                     onOpenSettings = onOpenSettings,
                     onOpenImport = { showImportDialog = true },
                     onSearchFocusChanged = { searchFieldFocused = it },
+                    searchFocusable = searchFocusable,
                     focusChannelId = channelJump?.target?.id,
                     focusToken = focusToken
                 )
@@ -395,7 +418,8 @@ fun MainTvScreen(
                                     onCategorySelected(CategoryFilter.ALL)
                                 },
                                 onVisibleCategories = { visibleCategories = it },
-                                onSearchFocusChanged = { searchFieldFocused = it }
+                                onSearchFocusChanged = { searchFieldFocused = it },
+                                searchFocusable = searchFocusable
                             )
 
                             if (filtered.isEmpty()) {
@@ -469,7 +493,8 @@ fun MainTvScreen(
                                     onCategorySelected(CategoryFilter.ALL)
                                 },
                                 onVisibleCategories = { visibleCategories = it },
-                                onSearchFocusChanged = { searchFieldFocused = it }
+                                onSearchFocusChanged = { searchFieldFocused = it },
+                                searchFocusable = searchFocusable
                             )
                         },
                         modifier = Modifier.weight(1f)
@@ -523,7 +548,8 @@ fun MainTvScreen(
                                 onCategorySelected(CategoryFilter.ALL)
                             },
                             onVisibleCategories = { visibleCategories = it },
-                            onSearchFocusChanged = { searchFieldFocused = it }
+                            onSearchFocusChanged = { searchFieldFocused = it },
+                            searchFocusable = searchFocusable
                         )
                     }
                 ) { paddingValues ->

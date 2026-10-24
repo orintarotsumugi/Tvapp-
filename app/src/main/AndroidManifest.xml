@@ -20,6 +20,17 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Required to install an in-app downloaded update. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!--
+      Lets the app start itself when the device boots, so a television turns on
+      straight into Kurdish TV Live. Read by AutoStartReceiver, which honours the
+      viewer's "Auto-resume on start" switch before launching anything.
+
+      Note on Android 10+ background-activity-start restrictions: some firmwares
+      block an activity launched straight from a boot broadcast. When that happens
+      nothing breaks — the app simply opens on the next manual launch, straight
+      into the last watched channel (the same setting drives both behaviours).
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Needed on Android 11+ so the updater can tell whether an update exists. -->
     <queries>
@@ -77,7 +88,27 @@
             android:label="@string/app_name"
             android:theme="@style/Theme.MyApplication"
             android:banner="@drawable/ic_tv_banner"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="stateHidden|adjustResize">
+            <!--
+              `stateHidden`, not the bare `adjustResize` this used to carry.
+
+              The default soft-input state is `stateUnspecified`, which lets the
+              system *restore* the IME visibility of the previous session: if the
+              app was last used with the on-screen keyboard up — and on a TV box it
+              is usually killed rather than exited, so "last used" is often exactly
+              that — the keyboard was re-shown on the very first frame, over the
+              channel grid, with the search field focused underneath it. That is
+              the "search opens by itself" bug, and it happens before any of the
+              app's own focus placement gets a chance to run.
+
+              `stateHidden` says the IME must not be shown when the activity starts,
+              whatever state it was in before. It applies only at launch: a viewer who
+              deliberately navigates to the search field still gets the keyboard,
+              because that is a fresh showSoftInput call from the focused field.
+
+              `adjustResize` is kept — it is what makes the window shrink when the
+              keyboard *is* open, so the results stay visible while typing.
+            -->
             <!--
               Two filters, not one.
 
@@ -99,6 +130,24 @@
                 <category android:name="android.software.leanback.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          Starts the app when the device boots, so a TV that turns on goes straight
+          to the last watched channel. `exported="false"`: the only broadcasts it
+          answers are the system's own boot actions, and no other app can deliver
+          them.
+
+          QUICKBOOT_POWER_ON is the same event under the name several TV boxes and
+          HTC-style firmwares send instead of BOOT_COMPLETED.
+        -->
+        <receiver
+            android:name=".kurdishtv.boot.AutoStartReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWER_ON" />
+            </intent-filter>
+        </receiver>
 
         <!--
           Exposes a downloaded update APK to the system package installer as a

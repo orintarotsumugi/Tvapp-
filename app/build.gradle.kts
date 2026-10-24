@@ -34,12 +34,27 @@ android {
   }
 
   signingConfigs {
-    // Keystore requirement commented out as requested.
-    // Apps work without custom release keystore; using default debug signing prevents build breaks.
-    /*
+    // Release signing, restored. See SIGNING.md for why this is not optional.
+    //
+    // With this block commented out, the release buildType fell back to AGP's
+    // default *debug* config — and `debug.keystore` is gitignored, so every CI
+    // runner generated a fresh random key for every release. Each published APK
+    // was therefore signed with a different key, which breaks the app in two
+    // ways at once:
+    //
+    //  - The in-app updater downloads the new APK, verifies it against the
+    //    installed signature (`ApkInstaller.isSignedBySameCertificate`) and
+    //    correctly refuses to install it — so the auto-update flow can never
+    //    succeed for anyone. Android itself would refuse too
+    //    (INSTALL_FAILED_UPDATE_INCOMPATIBLE).
+    //  - Every release requires a full uninstall, losing every viewer's
+    //    favourites and watch history.
+    //
+    // The key is committed (`release-key.jks`, PKCS12, alias `upload`) precisely
+    // so every machine and every CI run signs identically. Order of preference:
+    // a real upload key from the environment, then the committed key, and only
+    // then the local debug key — loudly, because that is the original bug.
     create("release") {
-      // Priority: a real upload keystore from the environment, then the committed
-      // release key, and only then the local debug key.
       val envKeystore = System.getenv("KEYSTORE_PATH")?.let { file(it) }
       val bundledKeystore = file("${rootDir}/release-key.jks")
 
@@ -58,18 +73,14 @@ android {
         }
         else -> {
           rootProject.logger.warn(
-            "WARNING: no release keystore found. Falling back to the local debug key, " +
-              "which will NOT match previously published builds. Restore " +
-              "release-key.jks (see README) or set KEYSTORE_PATH before publishing."
+            "WARNING: release-key.jks is missing. Falling back to the debug key, " +
+              "which will NOT match previously published builds — every installed " +
+              "copy will refuse to update over this one. Restore release-key.jks " +
+              "(see SIGNING.md) or set KEYSTORE_PATH."
           )
-          storeFile = file("${rootDir}/debug.keystore")
-          storePassword = "android"
-          keyAlias = "androiddebugkey"
-          keyPassword = "android"
         }
       }
     }
-    */
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
       storePassword = "android"
@@ -86,9 +97,15 @@ android {
       isMinifyEnabled = true
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      // Keystore requirement commented out as requested:
-      // signingConfig = signingConfigs.getByName("release")
-      signingConfig = signingConfigs.getByName("debug")
+      // The committed release key when it exists, and the debug key only as the
+      // loudly-warned last resort configured above. Signed with the same key on
+      // every machine and every CI run, which is what makes the in-app updater's
+      // signature check — and Android's own upgrade rule — pass at all.
+      signingConfig = if (signingConfigs.getByName("release").storeFile?.exists() == true) {
+        signingConfigs.getByName("release")
+      } else {
+        signingConfigs.getByName("debug")
+      }
     }
     debug {
       signingConfig = signingConfigs.getByName("debug")

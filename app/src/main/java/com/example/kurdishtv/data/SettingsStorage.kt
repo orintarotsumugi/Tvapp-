@@ -22,6 +22,7 @@ class SettingsStorage(context: Context) {
                 themeMode = enumOrDefault(prefs.getString(KEY_THEME, null), ThemeMode.AMOLED),
                 deviceMode = enumOrDefault(prefs.getString(KEY_DEVICE_MODE, null), DeviceMode.AUTO),
                 startCategory = enumOrDefault(prefs.getString(KEY_START_CATEGORY, null), CategoryFilter.ALL),
+                autoResume = prefs.getBoolean(KEY_AUTO_RESUME, true),
                 autoplay = prefs.getBoolean(KEY_AUTOPLAY, true),
                 showLogos = prefs.getBoolean(KEY_SHOW_LOGOS, true),
                 autoHideControls = prefs.getBoolean(KEY_AUTO_HIDE, true),
@@ -46,6 +47,7 @@ class SettingsStorage(context: Context) {
                 .putString(KEY_THEME, settings.themeMode.name)
                 .putString(KEY_DEVICE_MODE, settings.deviceMode.name)
                 .putString(KEY_START_CATEGORY, settings.startCategory.name)
+                .putBoolean(KEY_AUTO_RESUME, settings.autoResume)
                 .putBoolean(KEY_AUTOPLAY, settings.autoplay)
                 .putBoolean(KEY_SHOW_LOGOS, settings.showLogos)
                 .putBoolean(KEY_AUTO_HIDE, settings.autoHideControls)
@@ -66,6 +68,7 @@ class SettingsStorage(context: Context) {
         private const val KEY_THEME = "theme_mode"
         private const val KEY_DEVICE_MODE = "device_mode"
         private const val KEY_START_CATEGORY = "start_category"
+        private const val KEY_AUTO_RESUME = "auto_resume"
         private const val KEY_AUTOPLAY = "autoplay"
         private const val KEY_SHOW_LOGOS = "show_logos"
         private const val KEY_AUTO_HIDE = "auto_hide_controls"

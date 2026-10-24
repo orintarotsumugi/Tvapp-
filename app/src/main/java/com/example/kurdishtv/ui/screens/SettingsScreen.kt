@@ -243,7 +243,16 @@ fun SettingsScreen(
                         title = "Channel logos",
                         subtitle = "Load logos over the network",
                         checked = settings.showLogos,
-                        onCheckedChange = { value -> onUpdate { it.copy(showLogos = value) } },
+                        onCheckedChange = { value -> onUpdate { it.copy(showLogos = value) } }
+                    )
+
+                    SettingsSwitchRow(
+                        iconRes = KurdishTvIcons.PlayRes,
+                        title = "Auto-resume on start",
+                        subtitle = "Turn on the TV → the app opens by itself " +
+                            "and plays your last watched channel",
+                        checked = settings.autoResume,
+                        onCheckedChange = { value -> onUpdate { it.copy(autoResume = value) } },
                         showDivider = false
                     )
                 }

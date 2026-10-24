@@ -40,6 +40,8 @@ internal fun TvTopChrome(
     onHomeClick: () -> Unit = onRetryClick,
     onVisibleCategories: (List<CategoryFilter>) -> Unit = {},
     onSearchFocusChanged: (Boolean) -> Unit = {},
+    /** See [SearchBarM3.focusEnabled] — held false for the first frame of a visit. */
+    searchFocusable: Boolean = true,
     compact: Boolean = false
 ) {
     Column {
@@ -56,7 +58,8 @@ internal fun TvTopChrome(
         SearchBarM3(
             query = uiState.searchQuery,
             onQueryChange = onSearchQueryChanged,
-            onFocusChanged = onSearchFocusChanged
+            onFocusChanged = onSearchFocusChanged,
+            focusEnabled = searchFocusable
         )
         CategoryBar(
             selectedCategory = uiState.selectedCategory,
@@ -91,6 +94,7 @@ internal fun LandscapeCompactLayout(
     onOpenSettings: () -> Unit,
     onOpenImport: () -> Unit,
     onSearchFocusChanged: (Boolean) -> Unit,
+    searchFocusable: Boolean,
     focusChannelId: String?,
     focusToken: String
 ) {
@@ -113,6 +117,7 @@ internal fun LandscapeCompactLayout(
                     onCategorySelected(CategoryFilter.ALL)
                 },
                 onSearchFocusChanged = onSearchFocusChanged,
+                searchFocusable = searchFocusable,
                 compact = true
             )
         }
